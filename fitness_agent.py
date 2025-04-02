@@ -7,7 +7,7 @@ from typing import Dict, List
 from dotenv import load_dotenv
 from langchain.schema import HumanMessage, SystemMessage
 from langchain_community.callbacks import get_openai_callback
-from langchain_community.chat_models import ChatOllama
+from langchain_ollama import ChatOllama
 from pydantic import BaseModel
 
 # Set up logging
