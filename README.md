@@ -1,6 +1,8 @@
 # Fitness Agent
 
-A LangChain-based AI agent that helps with fitness planning, including workout routines, diet plans, and calendar scheduling. Features persistent user profiles and plan storage with PostgreSQL.
+A LangChain-based AI agent that helps with fitness planning, including workout routines, diet plans, and calendar scheduling. Features persistent user-profiles and plan storage with PostgreSQL.
+
+Note: The model could be changed since the optimal model exists. I use Ollama2 only for research or testing.
 
 [streamlit-app-2025-04-02-17-04-00.webm](https://github.com/user-attachments/assets/59367593-d932-4ed2-971b-485b418d74ba)
 
