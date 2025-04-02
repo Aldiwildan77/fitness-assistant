@@ -14,7 +14,10 @@ from pydantic import BaseModel
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("fitness_agent.log"), logging.StreamHandler()],
+    handlers=[
+        logging.FileHandler("logs/fitness_agent.log"),
+        # logging.StreamHandler()
+    ],
 )
 logger = logging.getLogger("fitness_agent")
 
