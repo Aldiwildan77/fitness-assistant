@@ -134,6 +134,14 @@ If asked to create a workout or diet plan, you'll need to gather information lik
             or user_input.lower() == "list diets"
         ):
             return self.list_diet_plans()
+        elif user_input.lower().startswith("view workout plan"):
+            return self.view_workout_plan(user_input)
+        elif user_input.lower().startswith("view diet plan"):
+            return self.view_diet_plan(user_input)
+        elif user_input.lower().startswith("load workout plan"):
+            return self.load_workout_plan(user_input)
+        elif user_input.lower().startswith("load diet plan"):
+            return self.load_diet_plan(user_input)
         elif user_input.lower().startswith("help"):
             return self.show_help()
         elif user_input.lower() == "exit" or user_input.lower() == "quit":
@@ -424,7 +432,11 @@ Saved diet plans: {len(self.context['saved_diet_plans'])}
                 pass
 
         # Convert workout plans to dictionaries for database storage
-        plan_data = [plan.model_dump() for plan in self.context["current_workout_plan"]]
+        # Ensure current_workout_plan is treated as a list
+        plans = self.context["current_workout_plan"]
+        if not isinstance(plans, list):
+            plans = [plans]
+        plan_data = [plan.model_dump() for plan in plans]
 
         # Save to database
         plan_id = self.db_manager.save_workout_plan(
@@ -470,7 +482,11 @@ Saved diet plans: {len(self.context['saved_diet_plans'])}
                 pass
 
         # Convert diet plans to dictionaries for database storage
-        plan_data = [plan.model_dump() for plan in self.context["current_diet_plan"]]
+        # Ensure current_diet_plan is treated as a list
+        plans = self.context["current_diet_plan"]
+        if not isinstance(plans, list):
+            plans = [plans]
+        plan_data = [plan.model_dump() for plan in plans]
 
         # Save to database
         plan_id = self.db_manager.save_diet_plan(
@@ -503,9 +519,7 @@ Saved diet plans: {len(self.context['saved_diet_plans'])}
             for i, plan in enumerate(self.context["saved_workout_plans"]):
                 response += f"{i+1}. {plan['plan_name']} (Created: {plan['created_at'].strftime('%Y-%m-%d')})\n"
 
-            response += (
-                "\nYou can load or view these plans in a future version of the app."
-            )
+            response += "\nTo view or load a specific plan, say 'view workout plan: 1' or 'load workout plan: 1' (using the number from the list)."
 
         # Add response to chat history
         self.chat_history.append({"role": "assistant", "content": response})
@@ -522,9 +536,7 @@ Saved diet plans: {len(self.context['saved_diet_plans'])}
             for i, plan in enumerate(self.context["saved_diet_plans"]):
                 response += f"{i+1}. {plan['plan_name']} (Created: {plan['created_at'].strftime('%Y-%m-%d')})\n"
 
-            response += (
-                "\nYou can load or view these plans in a future version of the app."
-            )
+            response += "\nTo view or load a specific plan, say 'view diet plan: 1' or 'load diet plan: 1' (using the number from the list)."
 
         # Add response to chat history
         self.chat_history.append({"role": "assistant", "content": response})
@@ -547,6 +559,249 @@ Saved diet plans: {len(self.context['saved_diet_plans'])}
         self.chat_history.append({"role": "assistant", "content": response})
         return response
 
+    def view_workout_plan(self, user_input):
+        """View a specific saved workout plan"""
+        logger.info("Viewing saved workout plan")
+
+        if not self.context["saved_workout_plans"]:
+            response = "You don't have any saved workout plans yet. Create a plan and then say 'save workout' to save it."
+            self.chat_history.append({"role": "assistant", "content": response})
+            return response
+
+        # Extract plan number from input
+        try:
+            # Try to extract the number after the colon
+            if ":" in user_input:
+                # Format: "view workout plan: 2"
+                number_part = user_input.split(":")[1].strip().lstrip("#")
+            else:
+                # Fallback to older format: "view workout plan 2"
+                number_part = user_input.split("plan")[1].strip().lstrip("#")
+
+            plan_index = int(number_part) - 1  # Convert to 0-based index
+
+            if plan_index < 0 or plan_index >= len(self.context["saved_workout_plans"]):
+                response = f"Invalid plan number. Please choose a number between 1 and {len(self.context['saved_workout_plans'])}."
+                self.chat_history.append({"role": "assistant", "content": response})
+                return response
+
+            # Get the selected plan
+            selected_plan = self.context["saved_workout_plans"][plan_index]
+            plan_data = selected_plan["plan_data"]
+
+            # Format the response
+            response = f"📋 Workout Plan: {selected_plan['plan_name']}\n"
+            response += (
+                f"Created: {selected_plan['created_at'].strftime('%Y-%m-%d')}\n\n"
+            )
+
+            # Display each day's workout
+            for day_plan in plan_data:
+                response += f"📅 {day_plan['day']}:\n"
+                response += f"⏱️ Duration: {day_plan['duration']}\n"
+                response += f"💪 Intensity: {day_plan['intensity']}\n"
+                response += "Exercises:\n"
+                for exercise in day_plan["exercises"]:
+                    exercise_info = f"- {exercise['name']}: {exercise['sets']} sets x {exercise['reps']} reps"
+                    if "rest_period" in exercise:
+                        exercise_info += f" (Rest: {exercise['rest_period']})"
+                    response += exercise_info + "\n"
+                response += "\n"
+
+            response += (
+                "To use this plan, say 'load workout plan: "
+                + str(plan_index + 1)
+                + "' to make it your current workout plan."
+            )
+
+        except (ValueError, IndexError) as e:
+            logger.error(f"Error parsing plan number: {e}")
+            response = "I couldn't understand which plan you want to view. Please say 'view workout plan: 1' (using the number from the list)."
+
+        # Add response to chat history
+        self.chat_history.append({"role": "assistant", "content": response})
+        return response
+
+    def view_diet_plan(self, user_input):
+        """View a specific saved diet plan"""
+        logger.info("Viewing saved diet plan")
+
+        if not self.context["saved_diet_plans"]:
+            response = "You don't have any saved diet plans yet. Create a plan and then say 'save diet' to save it."
+            self.chat_history.append({"role": "assistant", "content": response})
+            return response
+
+        # Extract plan number from input
+        try:
+            # Try to extract the number after the colon
+            if ":" in user_input:
+                # Format: "view diet plan: 2"
+                number_part = user_input.split(":")[1].strip().lstrip("#")
+            else:
+                # Fallback to older format: "view diet plan 2"
+                number_part = user_input.split("plan")[1].strip().lstrip("#")
+
+            plan_index = int(number_part) - 1  # Convert to 0-based index
+
+            if plan_index < 0 or plan_index >= len(self.context["saved_diet_plans"]):
+                response = f"Invalid plan number. Please choose a number between 1 and {len(self.context['saved_diet_plans'])}."
+                self.chat_history.append({"role": "assistant", "content": response})
+                return response
+
+            # Get the selected plan
+            selected_plan = self.context["saved_diet_plans"][plan_index]
+            plan_data = selected_plan["plan_data"]
+
+            # Format the response
+            response = f"📋 Diet Plan: {selected_plan['plan_name']}\n"
+            response += (
+                f"Created: {selected_plan['created_at'].strftime('%Y-%m-%d')}\n\n"
+            )
+
+            # Display each meal
+            for meal in plan_data:
+                response += f"🍽️ {meal['meal_type']}:\n"
+                response += f"Calories: {meal['calories']}\n"
+                macros = meal["macros"]
+                response += f"Macros: Protein: {macros['protein']}g, Carbs: {macros['carbs']}g, Fat: {macros['fat']}g\n"
+                response += "Foods:\n"
+                for food in meal["foods"]:
+                    response += f"- {food}\n"
+                response += "\n"
+
+            response += (
+                "To use this plan, say 'load diet plan: "
+                + str(plan_index + 1)
+                + "' to make it your current diet plan."
+            )
+
+        except (ValueError, IndexError) as e:
+            logger.error(f"Error parsing plan number: {e}")
+            response = "I couldn't understand which plan you want to view. Please say 'view diet plan: 1' (using the number from the list)."
+
+        # Add response to chat history
+        self.chat_history.append({"role": "assistant", "content": response})
+        return response
+
+    def load_workout_plan(self, user_input):
+        """Load a saved workout plan and make it the current workout plan"""
+        logger.info("Loading saved workout plan")
+
+        if not self.context["saved_workout_plans"]:
+            response = "You don't have any saved workout plans yet. Create a plan and then say 'save workout' to save it."
+            self.chat_history.append({"role": "assistant", "content": response})
+            return response
+
+        # Extract plan number from input
+        try:
+            # Try to extract the number after the colon
+            if ":" in user_input:
+                # Format: "load workout plan: 2"
+                number_part = user_input.split(":")[1].strip().lstrip("#")
+            else:
+                # Fallback to older format: "load workout plan 2"
+                number_part = user_input.split("plan")[1].strip().lstrip("#")
+
+            plan_index = int(number_part) - 1  # Convert to 0-based index
+
+            if plan_index < 0 or plan_index >= len(self.context["saved_workout_plans"]):
+                response = f"Invalid plan number. Please choose a number between 1 and {len(self.context['saved_workout_plans'])}."
+                self.chat_history.append({"role": "assistant", "content": response})
+                return response
+
+            # Get the selected plan
+            selected_plan = self.context["saved_workout_plans"][plan_index]
+            plan_data = selected_plan["plan_data"]
+
+            # Import WorkoutPlan for this function
+            from fitness_agent import WorkoutPlan
+
+            # Convert the stored JSON plan data back into WorkoutPlan objects
+            workout_plans = []
+            for day_plan in plan_data:
+                workout_plans.append(WorkoutPlan(**day_plan))
+
+            # Set as current workout plan
+            self.context["current_workout_plan"] = workout_plans
+
+            # Format the response
+            response = f"✅ I've loaded the workout plan '{selected_plan['plan_name']}' as your current workout plan.\n\n"
+            response += f"This is a {len(workout_plans)}-day plan.\n\n"
+            response += "You can now:\n"
+            response += "- Schedule this workout with 'schedule workout'\n"
+            response += "- Export it to a calendar with 'export calendar'\n"
+            response += (
+                "- View the details with 'view workout plan: "
+                + str(plan_index + 1)
+                + "'"
+            )
+
+        except (ValueError, IndexError) as e:
+            logger.error(f"Error parsing plan number: {e}")
+            response = "I couldn't understand which plan you want to load. Please say 'load workout plan: 1' (using the number from the list)."
+
+        # Add response to chat history
+        self.chat_history.append({"role": "assistant", "content": response})
+        return response
+
+    def load_diet_plan(self, user_input):
+        """Load a saved diet plan and make it the current diet plan"""
+        logger.info("Loading saved diet plan")
+
+        if not self.context["saved_diet_plans"]:
+            response = "You don't have any saved diet plans yet. Create a plan and then say 'save diet' to save it."
+            self.chat_history.append({"role": "assistant", "content": response})
+            return response
+
+        # Extract plan number from input
+        try:
+            # Try to extract the number after the colon
+            if ":" in user_input:
+                # Format: "load diet plan: 2"
+                number_part = user_input.split(":")[1].strip().lstrip("#")
+            else:
+                # Fallback to older format: "load diet plan 2"
+                number_part = user_input.split("plan")[1].strip().lstrip("#")
+
+            plan_index = int(number_part) - 1  # Convert to 0-based index
+
+            if plan_index < 0 or plan_index >= len(self.context["saved_diet_plans"]):
+                response = f"Invalid plan number. Please choose a number between 1 and {len(self.context['saved_diet_plans'])}."
+                self.chat_history.append({"role": "assistant", "content": response})
+                return response
+
+            # Get the selected plan
+            selected_plan = self.context["saved_diet_plans"][plan_index]
+            plan_data = selected_plan["plan_data"]
+
+            # Import DietPlan for this function
+            from fitness_agent import DietPlan
+
+            # Convert the stored JSON plan data back into DietPlan objects
+            diet_plans = []
+            for meal in plan_data:
+                diet_plans.append(DietPlan(**meal))
+
+            # Set as current diet plan
+            self.context["current_diet_plan"] = diet_plans
+
+            # Format the response
+            response = f"✅ I've loaded the diet plan '{selected_plan['plan_name']}' as your current diet plan.\n\n"
+            response += f"This plan includes {len(diet_plans)} meals.\n\n"
+            response += (
+                "You can now view the details with 'view diet plan: "
+                + str(plan_index + 1)
+                + "'"
+            )
+
+        except (ValueError, IndexError) as e:
+            logger.error(f"Error parsing plan number: {e}")
+            response = "I couldn't understand which plan you want to load. Please say 'load diet plan: 1' (using the number from the list)."
+
+        # Add response to chat history
+        self.chat_history.append({"role": "assistant", "content": response})
+        return response
+
     def show_help(self):
         """Show help information"""
         logger.info("Showing help information")
@@ -561,10 +816,14 @@ Saved diet plans: {len(self.context['saved_diet_plans'])}
 6. 'save diet [name: My Diet]' - Save the current diet plan to your profile
 7. 'list workout plans' - Show your saved workout plans
 8. 'list diet plans' - Show your saved diet plans
-9. 'view profile' - See your current profile information
-10. 'update profile age: 30, weight: 70kg, goals: lose weight' - Update your profile
-11. 'help' - Show this help information
-12. 'exit' or 'quit' - Exit the chat
+9. 'view workout [plan: 1]' - View details of a specific saved workout plan
+10. 'load workout [plan: 1]' - Load a saved workout plan as your current plan
+11. 'view diet [plan: 1]' - View details of a specific saved diet plan
+12. 'load diet [plan: 1]' - Load a saved diet plan as your current plan
+13. 'view profile' - See your current profile information
+14. 'update profile age: 30, weight: 70kg, goals: lose weight' - Update your profile
+15. 'help' - Show this help information
+16. 'exit' or 'quit' - Exit the chat
 
 You can also just chat with me normally about fitness topics!
 """
